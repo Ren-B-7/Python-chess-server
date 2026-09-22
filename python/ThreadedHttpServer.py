@@ -49,7 +49,7 @@ class TimeoutThreadingHTTPServer(ThreadingHTTPServer):
         "_check_interval",
     )
 
-    def __init__(self, server_address, handler_class, timeout_seconds, **kwargs):
+    def __init__(self, server_address, handler_class, timeout_seconds=0, **kwargs):
         """
         Initialize the timeout HTTP server.
 
@@ -71,7 +71,13 @@ class TimeoutThreadingHTTPServer(ThreadingHTTPServer):
 
             # Pre-calculate check interval to avoid repeated computation
             # Cap at 60 seconds to ensure responsive shutdown
-            self._check_interval = min(60, timeout_seconds / 5)
+            if timeout_seconds > 0:
+                self._check_interval = min(60, timeout_seconds / 5)
+            else:
+                # Ensure that timeout_seconds is not negative
+                self.inactivity_timeout = 0
+                # If timeout_seconds is 0 then this wont be used
+                self._check_interval = 1
 
             super().__init__(server_address, handler_class, **kwargs)
 
@@ -95,7 +101,11 @@ class TimeoutThreadingHTTPServer(ThreadingHTTPServer):
             super().server_activate()
             self.last_activity_time = time.time()
             # Daemon thread ensures clean shutdown even if monitoring fails
-            threading.Thread(target=self._monitor_inactivity, daemon=True).start()
+            if self.inactivity_timeout > 0:
+                print(f"Inactivity Timeout Set For {self.inactivity_timeout}")
+                threading.Thread(target=self._monitor_inactivity, daemon=True).start()
+            else:
+                print("Inactivity timeout not set")
         except Exception as e:
             raise MajorThreadedHttpServerException(
                 f"Unable to start server: {e}"
